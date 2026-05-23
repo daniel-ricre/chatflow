@@ -5,7 +5,6 @@ services:
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
-    plan: free
     healthCheckPath: /
     envVars:
       - key: GEMINI_API_KEY
@@ -17,7 +16,6 @@ services:
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
-    plan: free
     envVars:
       - key: VITE_API_URL
         value: https://chatflow-api-4w7m.onrender.com
