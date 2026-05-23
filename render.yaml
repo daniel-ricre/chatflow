@@ -1,5 +1,4 @@
 services:
-  # Backend API
   - type: web
     name: chatflow-api
     runtime: python
@@ -12,13 +11,13 @@ services:
       - key: GEMINI_API_KEY
         sync: false
 
-  # Frontend React
-  - type: static
+  - type: web
     name: chatflow-frontend
+    runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     plan: free
     envVars:
       - key: VITE_API_URL
-        value: https://chatflow-api.onrender.com
+        value: https://chatflow-api-4w7m.onrender.com
