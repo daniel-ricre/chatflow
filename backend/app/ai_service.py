@@ -1,14 +1,22 @@
 import httpx
-from app.config import GEMINI_API_KEY
+from app.config import GROQ_API_KEY
+
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 async def chat(prompt: str) -> str:
     try:
-        async with httpx.AsyncClient(timeout=30) as c:
+        async with httpx.AsyncClient(timeout=15) as c:
             r = await c.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
-                json={"contents":[{"parts":[{"text":prompt}]}],"generationConfig":{"maxOutputTokens":200}})
+                GROQ_URL,
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": "llama-3.1-8b-instant",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 200
+                }
+            )
             if r.status_code == 200:
-                return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+                return r.json()["choices"][0]["message"]["content"]
             return f"Error de API: {r.status_code}"
     except Exception as e:
         return f"Error: {str(e)}"
