@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 
-const API = 'https://chatflow-api-4w7m.onrender.com/api/v1'
+const API = 'https://chatflow-api-oj45.onrender.com/api/v1'
 
 export default function Dashboard() {
   const [chatbots, setChatbots] = useState([])

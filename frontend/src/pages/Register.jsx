@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import axios from 'axios'
 
-const API = 'https://chatflow-api-4w7m.onrender.com/api/v1'
+const API = 'https://chatflow-api-oj45.onrender.com/api/v1'
 
 export default function Register() {
   const [form, setForm] = useState({ email: '', password: '', company_name: '', business_type: '' })
