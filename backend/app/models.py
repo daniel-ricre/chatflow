@@ -21,4 +21,13 @@ class Chatbot(Base):
     welcome_message = Column(String, default="¡Hola! ¿En qué puedo ayudarte?")
     personality = Column(Text)
     embed_code = Column(Text)
+    total_chats = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+    id = Column(Integer, primary_key=True, index=True)
+    chatbot_id = Column(Integer, ForeignKey("chatbots.id"), nullable=False)
+    user_message = Column(Text, nullable=False)
+    bot_response = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
