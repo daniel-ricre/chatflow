@@ -3,7 +3,8 @@ from app.config import GROQ_API_KEY
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-async def chat(prompt: str) -> str:
+async def chat(messages: list) -> str:
+    """Envía el historial completo a Groq para mantener contexto."""
     try:
         async with httpx.AsyncClient(timeout=15) as c:
             r = await c.post(
@@ -11,7 +12,7 @@ async def chat(prompt: str) -> str:
                 headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
                 json={
                     "model": "llama-3.1-8b-instant",
-                    "messages": [{"role": "user", "content": prompt}],
+                    "messages": messages,
                     "max_tokens": 200
                 }
             )

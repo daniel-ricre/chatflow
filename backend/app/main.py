@@ -2,8 +2,9 @@ from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
+from typing import List, Optional
 from app.database import get_db, engine, Base
-from app.models import User, Chatbot
+from app.models import User, Chatbot, Conversation
 from app.security import get_password_hash, verify_password, create_access_token, decode_token
 from app.ai_service import chat
 
@@ -13,7 +14,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 class R(BaseModel): email: str; password: str; company_name: str; business_type: str
 class L(BaseModel): email: str; password: str
 class CB(BaseModel): name: str; welcome_message: str = "¡Hola!"; personality: str = "Eres amable."
-class CH(BaseModel): chatbot_id: int; message: str
+class Msg(BaseModel): role: str; content: str
+class CH(BaseModel): chatbot_id: int; message: str; history: Optional[List[Msg]] = []
 
 @app.on_event("startup")
 async def init(): Base.metadata.create_all(bind=engine)
@@ -35,7 +37,7 @@ async def login(d: L, db=Depends(get_db)):
 async def create_bot(d: CB, token: str = Query(...), db=Depends(get_db)):
     try: u = db.query(User).filter(User.id == int(decode_token(token)["sub"])).first()
     except: raise HTTPException(401, "Token inválido")
-    b = Chatbot(name=d.name, user_id=u.id, welcome_message=d.welcome_message, personality=f"{d.personality} Negocio: {u.business_type}.", embed_code=f'<script src="https://chatflow.onrender.com/w/{u.id}"></script>')
+    b = Chatbot(name=d.name, user_id=u.id, welcome_message=d.welcome_message, personality=f"{d.personality} Negocio: {u.business_type}.", embed_code=f'<script src="https://chatflow-frontend-r6mx.onrender.com/widget.js" data-chatbot="{b.id}"></script>')
     db.add(b); u.chatbots_created += 1; db.commit()
     return {"id": b.id, "embed": b.embed_code}
 
@@ -44,8 +46,18 @@ async def chat_msg(d: CH, db=Depends(get_db)):
     b = db.query(Chatbot).filter(Chatbot.id == d.chatbot_id).first()
     if not b: raise HTTPException(404, "Bot no encontrado")
     u = db.query(User).filter(User.id == b.user_id).first()
-    prompt = f"Eres {b.name}. {b.personality}\nCliente: {d.message}\nRespuesta:"
-    return {"response": await chat(prompt)}
+    
+    # Construir mensajes con historial
+    messages = [{"role": "system", "content": f"Eres {b.name}. {b.personality}"}]
+    for h in (d.history or []):
+        messages.append({"role": h.role, "content": h.content})
+    messages.append({"role": "user", "content": d.message})
+    
+    response = await chat(messages)
+    db.add(Conversation(chatbot_id=b.id, user_message=d.message, bot_response=response))
+    b.total_chats += 1
+    db.commit()
+    return {"response": response}
 
 @app.get("/")
 async def root(): return {"status": "online"}
