@@ -1,7 +1,14 @@
 (function() {
   var script = document.currentScript;
   var chatbotId = script.getAttribute('data-chatbot') || '1';
-  var chatHistory = []; // MEMORIA de la conversación
+
+  // Recuperar o generar session_id
+  var SESSION_KEY = 'chatflow_session_' + chatbotId;
+  var sessionId = localStorage.getItem(SESSION_KEY);
+  if (!sessionId) {
+    sessionId = 'sess_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+    localStorage.setItem(SESSION_KEY, sessionId);
+  }
 
   var style = document.createElement('style');
   style.textContent = `
@@ -48,9 +55,6 @@
     input.value = '';
     messages.scrollTop = messages.scrollHeight;
 
-    // Guardar en historial local
-    chatHistory.push({role: 'user', content: msg});
-
     try {
       var resp = await fetch('https://chatflow-api-oj45.onrender.com/api/v1/chat', {
         method: 'POST',
@@ -58,15 +62,20 @@
         body: JSON.stringify({
           chatbot_id: parseInt(chatbotId),
           message: msg,
-          history: chatHistory.slice(0, -1) // enviar historial sin el último mensaje
+          session_id: sessionId  // Se envía el session_id
         })
       });
       var data = await resp.json();
       messages.innerHTML += '<div class="msg bot">' + data.response + '</div>';
-      chatHistory.push({role: 'assistant', content: data.response});
       messages.scrollTop = messages.scrollHeight;
+
+      // Si el servidor devuelve un nuevo session_id, actualizar
+      if (data.session_id) {
+        sessionId = data.session_id;
+        localStorage.setItem(SESSION_KEY, sessionId);
+      }
     } catch(e) {
-      messages.innerHTML += '<div class="msg bot">Error</div>';
+      messages.innerHTML += '<div class="msg bot">Error de conexión</div>';
     }
   };
 })();

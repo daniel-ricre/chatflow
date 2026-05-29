@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import List, Optional
+import uuid
 from app.database import get_db, engine, Base
 from app.models import User, Chatbot, Conversation
 from app.security import get_password_hash, verify_password, create_access_token, decode_token
@@ -14,8 +15,11 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 class R(BaseModel): email: str; password: str; company_name: str; business_type: str
 class L(BaseModel): email: str; password: str
 class CB(BaseModel): name: str; welcome_message: str = "¡Hola!"; personality: str = "Eres amable."
-class Msg(BaseModel): role: str; content: str
-class CH(BaseModel): chatbot_id: int; message: str; history: Optional[List[Msg]] = []
+class CH(BaseModel):
+    chatbot_id: int
+    message: str
+    session_id: Optional[str] = None
+    history: Optional[List[dict]] = []   # Ya no se usa, pero se acepta para compatibilidad
 
 @app.on_event("startup")
 async def init(): Base.metadata.create_all(bind=engine)
@@ -58,27 +62,42 @@ async def create_bot(d: CB, token: str = Query(...), db=Depends(get_db)):
 async def chat_msg(d: CH, db=Depends(get_db)):
     b = db.query(Chatbot).filter(Chatbot.id == d.chatbot_id).first()
     if not b: raise HTTPException(404, "Bot no encontrado")
-    u = db.query(User).filter(User.id == b.user_id).first()
 
-    # Prompt mejorado: instrucción directa para recordar la conversación
-    system_msg = (
-        f"Eres {b.name}. {b.personality} "
-        "Recuerda TODO el historial de la conversación. "
-        "Cuando el usuario pregunte por una opción numérica (ej: 'opción 2', 'la segunda opción'), "
-        "responde directamente con la información de esa opción que tú mismo listaste anteriormente. "
-        "No pidas más contexto, solo recupera la información que ya diste. "
-        "No vuelvas a presentarte a menos que te lo pidan explícitamente."
-    )
-    messages = [{"role": "system", "content": system_msg}]
-    for h in (d.history or []):
-        messages.append({"role": h.role, "content": h.content})
+    # Generar o conservar session_id
+    sid = d.session_id
+    if not sid:
+        sid = str(uuid.uuid4())
+
+    # Recuperar últimos 20 mensajes de la conversación desde la DB
+    db_messages = db.query(Conversation).filter(
+        Conversation.chatbot_id == b.id,
+        Conversation.session_id == sid
+    ).order_by(Conversation.created_at.asc()).limit(20).all()
+
+    # Construir el prompt con el contexto real
+    messages = [{"role": "system", "content": f"Eres {b.name}. {b.personality} Recuerda toda la conversación anterior. Cuando el usuario se refiera a una opción numérica, responde directamente con la información que tú mismo diste en esa lista. No preguntes de nuevo."}]
+    
+    # Agregar historial de la DB (más confiable)
+    for conv in db_messages:
+        messages.append({"role": "user", "content": conv.user_message})
+        messages.append({"role": "assistant", "content": conv.bot_response})
+    
+    # Agregar el mensaje actual del usuario
     messages.append({"role": "user", "content": d.message})
 
     response = await chat(messages)
-    db.add(Conversation(chatbot_id=b.id, user_message=d.message, bot_response=response))
+
+    # Guardar en DB
+    db.add(Conversation(
+        chatbot_id=b.id,
+        session_id=sid,
+        user_message=d.message,
+        bot_response=response
+    ))
     b.total_chats += 1
     db.commit()
-    return {"response": response}
+
+    return {"response": response, "session_id": sid}
 
 @app.get("/")
 async def root(): return {"status": "online"}
