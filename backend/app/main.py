@@ -60,12 +60,14 @@ async def chat_msg(d: CH, db=Depends(get_db)):
     if not b: raise HTTPException(404, "Bot no encontrado")
     u = db.query(User).filter(User.id == b.user_id).first()
 
-    # Prompt del sistema mejorado con instrucción de memoria
+    # Prompt mejorado: instrucción directa para recordar la conversación
     system_msg = (
         f"Eres {b.name}. {b.personality} "
-        "Recuerda todo el historial de la conversación. "
-        "Responde de manera coherente con lo que ya se ha hablado. "
-        "No te vuelvas a presentar a menos que el usuario lo pida."
+        "Recuerda TODO el historial de la conversación. "
+        "Cuando el usuario pregunte por una opción numérica (ej: 'opción 2', 'la segunda opción'), "
+        "responde directamente con la información de esa opción que tú mismo listaste anteriormente. "
+        "No pidas más contexto, solo recupera la información que ya diste. "
+        "No vuelvas a presentarte a menos que te lo pidan explícitamente."
     )
     messages = [{"role": "system", "content": system_msg}]
     for h in (d.history or []):
