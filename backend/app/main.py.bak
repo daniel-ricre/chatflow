@@ -37,8 +37,24 @@ async def login(d: L, db=Depends(get_db)):
 async def create_bot(d: CB, token: str = Query(...), db=Depends(get_db)):
     try: u = db.query(User).filter(User.id == int(decode_token(token)["sub"])).first()
     except: raise HTTPException(401, "Token inválido")
-    b = Chatbot(name=d.name, user_id=u.id, welcome_message=d.welcome_message, personality=f"{d.personality} Negocio: {u.business_type}.", embed_code=f'<script src="https://chatflow-frontend-r6mx.onrender.com/widget.js" data-chatbot="{b.id}"></script>')
-    db.add(b); u.chatbots_created += 1; db.commit()
+    
+    # 1. Crear el chatbot sin embed_code
+    b = Chatbot(
+        name=d.name,
+        user_id=u.id,
+        welcome_message=d.welcome_message,
+        personality=f"{d.personality} Negocio: {u.business_type}."
+        # embed_code se deja vacío por ahora
+    )
+    db.add(b)
+    db.flush()  # Ahora b.id está disponible
+    
+    # 2. Construir embed_code con el id real
+    b.embed_code = f'<script src="https://chatflow-frontend-r6mx.onrender.com/widget.js" data-chatbot="{b.id}"></script>'
+    u.chatbots_created += 1
+    db.commit()
+    db.refresh(b)
+    
     return {"id": b.id, "embed": b.embed_code}
 
 @app.post("/api/v1/chat")
@@ -46,13 +62,13 @@ async def chat_msg(d: CH, db=Depends(get_db)):
     b = db.query(Chatbot).filter(Chatbot.id == d.chatbot_id).first()
     if not b: raise HTTPException(404, "Bot no encontrado")
     u = db.query(User).filter(User.id == b.user_id).first()
-    
+
     # Construir mensajes con historial
     messages = [{"role": "system", "content": f"Eres {b.name}. {b.personality}"}]
     for h in (d.history or []):
         messages.append({"role": h.role, "content": h.content})
     messages.append({"role": "user", "content": d.message})
-    
+
     response = await chat(messages)
     db.add(Conversation(chatbot_id=b.id, user_message=d.message, bot_response=response))
     b.total_chats += 1
