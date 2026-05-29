@@ -6,14 +6,15 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 async def chat(messages: list) -> str:
     """Envía el historial completo a Groq para mantener contexto."""
     try:
-        async with httpx.AsyncClient(timeout=15) as c:
+        async with httpx.AsyncClient(timeout=30) as c:
             r = await c.post(
                 GROQ_URL,
                 headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
                 json={
                     "model": "llama-3.1-8b-instant",
                     "messages": messages,
-                    "max_tokens": 200
+                    "max_tokens": 500,
+                    "temperature": 0.7
                 }
             )
             if r.status_code == 200:

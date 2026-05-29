@@ -38,18 +38,15 @@ async def create_bot(d: CB, token: str = Query(...), db=Depends(get_db)):
     try: u = db.query(User).filter(User.id == int(decode_token(token)["sub"])).first()
     except: raise HTTPException(401, "Token inválido")
     
-    # 1. Crear el chatbot sin embed_code
     b = Chatbot(
         name=d.name,
         user_id=u.id,
         welcome_message=d.welcome_message,
         personality=f"{d.personality} Negocio: {u.business_type}."
-        # embed_code se deja vacío por ahora
     )
     db.add(b)
-    db.flush()  # Ahora b.id está disponible
+    db.flush()
     
-    # 2. Construir embed_code con el id real
     b.embed_code = f'<script src="https://chatflow-frontend-r6mx.onrender.com/widget.js" data-chatbot="{b.id}"></script>'
     u.chatbots_created += 1
     db.commit()
@@ -63,8 +60,14 @@ async def chat_msg(d: CH, db=Depends(get_db)):
     if not b: raise HTTPException(404, "Bot no encontrado")
     u = db.query(User).filter(User.id == b.user_id).first()
 
-    # Construir mensajes con historial
-    messages = [{"role": "system", "content": f"Eres {b.name}. {b.personality}"}]
+    # Prompt del sistema mejorado con instrucción de memoria
+    system_msg = (
+        f"Eres {b.name}. {b.personality} "
+        "Recuerda todo el historial de la conversación. "
+        "Responde de manera coherente con lo que ya se ha hablado. "
+        "No te vuelvas a presentar a menos que el usuario lo pida."
+    )
+    messages = [{"role": "system", "content": system_msg}]
     for h in (d.history or []):
         messages.append({"role": h.role, "content": h.content})
     messages.append({"role": "user", "content": d.message})
