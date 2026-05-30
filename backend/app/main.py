@@ -8,9 +8,8 @@ import uuid
 from app.database import get_db, engine, Base
 from app.models import User, Chatbot, Conversation
 from app.security import get_password_hash, verify_password, create_access_token, decode_token
-from app.ai_service import chat
+from app.chatbot_engine import ChatbotEngine
 
-# Forzar recreación de la tabla conversations con la nueva columna session_id
 try:
     Conversation.__table__.drop(engine, checkfirst=True)
     print("Tabla 'conversations' eliminada para recreación.")
@@ -48,9 +47,28 @@ class CH(BaseModel):
     session_id: Optional[str] = None
     history: Optional[List[dict]] = []
 
+DEFAULT_PRODUCTS = [
+    {"name": "Honda Civic", "price": 280000, "description": "Sedán compacto, motor 2.0L, excelente rendimiento."},
+    {"name": "Toyota Corolla", "price": 250000, "description": "Sedán confiable, bajo consumo de combustible."},
+    {"name": "Ford Focus", "price": 320000, "description": "Deportivo compacto, diseño aerodinámico."},
+    {"name": "Hyundai Elantra", "price": 275000, "description": "Sedán elegante, seguridad avanzada."},
+    {"name": "Nissan Sentra", "price": 240000, "description": "Motor eficiente, interior espacioso."},
+]
+
+engines = {}
+
+def get_engine(chatbot_name: str, chatbot_personality: str) -> ChatbotEngine:
+    key = f"{chatbot_name}_{chatbot_personality}"
+    if key not in engines:
+        engines[key] = ChatbotEngine(
+            bot_name=chatbot_name,
+            personality=chatbot_personality,
+            products=DEFAULT_PRODUCTS
+        )
+    return engines[key]
+
 @app.on_event("startup")
 async def init():
-    # Ya recreamos las tablas arriba, no es necesario llamar de nuevo
     pass
 
 @app.post("/api/v1/register")
@@ -92,24 +110,20 @@ async def chat_msg(d: CH, db=Depends(get_db)):
     b = db.query(Chatbot).filter(Chatbot.id == d.chatbot_id).first()
     if not b: raise HTTPException(404, "Bot no encontrado")
 
-    sid = d.session_id
-    if not sid:
-        sid = str(uuid.uuid4())
+    sid = d.session_id or str(uuid.uuid4())
 
     db_messages = db.query(Conversation).filter(
         Conversation.chatbot_id == b.id,
         Conversation.session_id == sid
     ).order_by(Conversation.created_at.asc()).limit(20).all()
 
-    messages = [{"role": "system", "content": f"Eres {b.name}. {b.personality} Recuerda toda la conversación anterior. Cuando el usuario se refiera a una opción numérica, responde directamente con la información que tú mismo diste en esa lista. No preguntes de nuevo."}]
-    
+    history = []
     for conv in db_messages:
-        messages.append({"role": "user", "content": conv.user_message})
-        messages.append({"role": "assistant", "content": conv.bot_response})
-    
-    messages.append({"role": "user", "content": d.message})
+        history.append({"role": "user", "content": conv.user_message})
+        history.append({"role": "assistant", "content": conv.bot_response})
 
-    response = await chat(messages)
+    engine = get_engine(b.name, b.personality)
+    response = engine.generate_response(d.message, history)
 
     db.add(Conversation(
         chatbot_id=b.id,
