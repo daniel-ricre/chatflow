@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import List, Optional
 import uuid
 from app.database import get_db, engine, Base
@@ -11,14 +12,24 @@ from app.ai_service import chat
 
 app = FastAPI(title="ChatFlow AI")
 
-# Configuración CORS - DEBE IR PRIMERO
+# Configuración CORS más agresiva
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+# Middleware manual para asegurar headers CORS en todas las respuestas
+@app.middleware("http")
+async def add_cors_header(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 class R(BaseModel): email: str; password: str; company_name: str; business_type: str
 class L(BaseModel): email: str; password: str
@@ -103,8 +114,3 @@ async def chat_msg(d: CH, db=Depends(get_db)):
 
 @app.get("/")
 async def root(): return {"status": "online"}
-
-# Manejador para OPTIONS (preflight)
-@app.options("/{rest_of_path:path}")
-async def preflight_handler():
-    return {"message": "OK"}
