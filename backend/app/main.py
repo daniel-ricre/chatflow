@@ -12,7 +12,6 @@ from app.ai_service import chat
 
 app = FastAPI(title="ChatFlow AI")
 
-# Configuración CORS más agresiva
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,7 +21,6 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# Middleware manual para asegurar headers CORS en todas las respuestas
 @app.middleware("http")
 async def add_cors_header(request: Request, call_next):
     response = await call_next(request)
