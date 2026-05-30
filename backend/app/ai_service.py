@@ -1,5 +1,5 @@
 import httpx
-from app.config import GROQ_API_KEY
+from app.config import settings
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -9,7 +9,10 @@ async def chat(messages: list) -> str:
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.post(
                 GROQ_URL,
-                headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                headers={
+                    "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                },
                 json={
                     "model": "llama-3.1-8b-instant",
                     "messages": messages,
