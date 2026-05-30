@@ -10,6 +10,16 @@ from app.models import User, Chatbot, Conversation
 from app.security import get_password_hash, verify_password, create_access_token, decode_token
 from app.ai_service import chat
 
+# Forzar recreación de la tabla conversations con la nueva columna session_id
+try:
+    Conversation.__table__.drop(engine, checkfirst=True)
+    print("Tabla 'conversations' eliminada para recreación.")
+except Exception as e:
+    print(f"Error al dropear tabla: {e}")
+
+Base.metadata.create_all(bind=engine)
+print("Tablas verificadas/creadas correctamente.")
+
 app = FastAPI(title="ChatFlow AI")
 
 app.add_middleware(
@@ -39,7 +49,9 @@ class CH(BaseModel):
     history: Optional[List[dict]] = []
 
 @app.on_event("startup")
-async def init(): Base.metadata.create_all(bind=engine)
+async def init():
+    # Ya recreamos las tablas arriba, no es necesario llamar de nuevo
+    pass
 
 @app.post("/api/v1/register")
 async def register(d: R, db=Depends(get_db)):
@@ -114,5 +126,4 @@ async def chat_msg(d: CH, db=Depends(get_db)):
 async def root(): return {"status": "online"}
 
 @app.head("/")
-async def root_head():
-    return {"status": "online"}
+async def root_head(): return {"status": "online"}
