@@ -112,3 +112,7 @@ async def chat_msg(d: CH, db=Depends(get_db)):
 
 @app.get("/")
 async def root(): return {"status": "online"}
+
+@app.head("/")
+async def root_head():
+    return {"status": "online"}
