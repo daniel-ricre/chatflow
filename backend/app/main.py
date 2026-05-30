@@ -10,7 +10,15 @@ from app.security import get_password_hash, verify_password, create_access_token
 from app.ai_service import chat
 
 app = FastAPI(title="ChatFlow AI")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# Configuración CORS - DEBE IR PRIMERO
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class R(BaseModel): email: str; password: str; company_name: str; business_type: str
 class L(BaseModel): email: str; password: str
@@ -19,7 +27,7 @@ class CH(BaseModel):
     chatbot_id: int
     message: str
     session_id: Optional[str] = None
-    history: Optional[List[dict]] = []   # Ya no se usa, pero se acepta para compatibilidad
+    history: Optional[List[dict]] = []
 
 @app.on_event("startup")
 async def init(): Base.metadata.create_all(bind=engine)
@@ -63,31 +71,25 @@ async def chat_msg(d: CH, db=Depends(get_db)):
     b = db.query(Chatbot).filter(Chatbot.id == d.chatbot_id).first()
     if not b: raise HTTPException(404, "Bot no encontrado")
 
-    # Generar o conservar session_id
     sid = d.session_id
     if not sid:
         sid = str(uuid.uuid4())
 
-    # Recuperar últimos 20 mensajes de la conversación desde la DB
     db_messages = db.query(Conversation).filter(
         Conversation.chatbot_id == b.id,
         Conversation.session_id == sid
     ).order_by(Conversation.created_at.asc()).limit(20).all()
 
-    # Construir el prompt con el contexto real
     messages = [{"role": "system", "content": f"Eres {b.name}. {b.personality} Recuerda toda la conversación anterior. Cuando el usuario se refiera a una opción numérica, responde directamente con la información que tú mismo diste en esa lista. No preguntes de nuevo."}]
     
-    # Agregar historial de la DB (más confiable)
     for conv in db_messages:
         messages.append({"role": "user", "content": conv.user_message})
         messages.append({"role": "assistant", "content": conv.bot_response})
     
-    # Agregar el mensaje actual del usuario
     messages.append({"role": "user", "content": d.message})
 
     response = await chat(messages)
 
-    # Guardar en DB
     db.add(Conversation(
         chatbot_id=b.id,
         session_id=sid,
@@ -101,3 +103,8 @@ async def chat_msg(d: CH, db=Depends(get_db)):
 
 @app.get("/")
 async def root(): return {"status": "online"}
+
+# Manejador para OPTIONS (preflight)
+@app.options("/{rest_of_path:path}")
+async def preflight_handler():
+    return {"message": "OK"}
